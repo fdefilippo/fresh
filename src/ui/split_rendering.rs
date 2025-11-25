@@ -372,14 +372,19 @@ impl SplitRenderer {
     }
 
     fn sync_viewport_to_content(state: &mut EditorState, content_rect: Rect) {
-        if state.viewport.width != content_rect.width
-            || state.viewport.height != content_rect.height
-        {
+        let size_changed = state.viewport.width != content_rect.width
+            || state.viewport.height != content_rect.height;
+
+        if size_changed {
             state
                 .viewport
                 .resize(content_rect.width, content_rect.height);
+        }
+
+        // Sync viewport with cursor if size changed or if marked for sync (cursor moved)
+        if size_changed || state.viewport.needs_sync() {
             let primary = *state.cursors.primary();
-            state.viewport.ensure_visible(&mut state.buffer, &primary);
+            state.viewport.sync_with_cursor(&mut state.buffer, &primary);
         }
     }
 
@@ -1798,10 +1803,6 @@ impl SplitRenderer {
             render_area.width as usize,
             gutter_width,
         );
-
-        // Ensure cursor is visible using Layout-aware check (handles virtual lines)
-        let primary = *state.cursors.primary();
-        state.viewport.ensure_visible_in_layout(&view_data.lines, &primary, gutter_width);
 
         let view_anchor = Self::calculate_view_anchor(&view_data.lines, state.viewport.top_byte);
         Self::render_compose_margins(frame, area, &compose_layout, &view_mode, theme);

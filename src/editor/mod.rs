@@ -1565,14 +1565,21 @@ impl Editor {
         }
     }
 
-    /// Sync only viewport from SplitViewState to EditorState
+    /// Sync only viewport DIMENSIONS from SplitViewState to EditorState
     /// Called before action_to_events to ensure correct viewport dimensions for PageDown/PageUp
-    /// Note: Does NOT sync cursors - EditorState is authoritative for cursor state during editing
+    /// Note: Does NOT sync scroll position (top_byte) - EditorState is authoritative for that
     fn sync_viewport_from_split_view_state(&mut self) {
         let split_id = self.split_manager.active_split();
         if let Some(view_state) = self.split_view_states.get(&split_id) {
             if let Some(buffer_state) = self.buffers.get_mut(&self.active_buffer) {
-                buffer_state.viewport = view_state.viewport.clone();
+                // Only sync dimensions, NOT scroll position
+                // EditorState's top_byte is authoritative (set by ensure_visible)
+                buffer_state.viewport.width = view_state.viewport.width;
+                buffer_state.viewport.height = view_state.viewport.height;
+                tracing::trace!(
+                    "sync_viewport_from_split: split {:?} dims {}x{} (keeping EditorState top_byte={})",
+                    split_id, view_state.viewport.width, view_state.viewport.height, buffer_state.viewport.top_byte
+                );
             }
         }
     }
@@ -2144,6 +2151,10 @@ impl Editor {
                 view_state.cursors = buffer_state.cursors.clone();
                 // Also sync viewport because cursor movements may trigger ensure_visible
                 // which updates EditorState's viewport
+                tracing::trace!(
+                    "sync_editor_to_split: EditorState top_byte={} -> split {:?} top_byte={}",
+                    buffer_state.viewport.top_byte, split_id, view_state.viewport.top_byte
+                );
                 view_state.viewport = buffer_state.viewport.clone();
             }
         }

@@ -209,17 +209,14 @@ impl Viewport {
         // Find the current top view line
         let top_view_line = self.find_view_line_for_byte(view_lines, self.top_byte);
 
-        // Calculate effective scroll offset (keep cursor away from edges)
-        let effective_offset = self.scroll_offset.min(viewport_height / 2);
-
-        // Check if cursor is within visible range (with scroll offset)
-        let visible_start = top_view_line + effective_offset;
-        let visible_end = top_view_line + viewport_height.saturating_sub(effective_offset);
+        // Check if cursor is within visible range (full viewport, no offset)
+        let visible_start = top_view_line;
+        let visible_end = top_view_line + viewport_height;
 
         let cursor_is_visible = cursor_view_line >= visible_start && cursor_view_line < visible_end;
 
         if !cursor_is_visible {
-            // Cursor is not visible - scroll to center it
+            // Cursor left the viewport - scroll to center it
             let target_top = cursor_view_line.saturating_sub(viewport_height / 2);
 
             // Apply scroll limit
@@ -455,6 +452,11 @@ impl Viewport {
         // For large files with lazy loading, ensure data around cursor is loaded
         let viewport_lines = self.visible_line_count().max(1);
 
+        tracing::trace!(
+            "ensure_visible: cursor={}, top_byte={}, viewport_lines={}, line_wrap={}",
+            cursor.position, self.top_byte, viewport_lines, self.line_wrap_enabled
+        );
+
         // CRITICAL: Load data around cursor position explicitly before using iterators
         // Load enough data to cover viewport above and below cursor
         let estimated_viewport_bytes = viewport_lines * 200;
@@ -564,10 +566,20 @@ impl Viewport {
                 }
 
                 // Apply scroll offset: cursor should be between offset and (viewport_lines - offset)
-                lines_from_top > effective_offset
-                    && lines_from_top < viewport_lines.saturating_sub(effective_offset)
+                let visible = lines_from_top > effective_offset
+                    && lines_from_top < viewport_lines.saturating_sub(effective_offset);
+                tracing::trace!(
+                    "ensure_visible (no wrap): lines_from_top={}, effective_offset={}, visible={}",
+                    lines_from_top, effective_offset, visible
+                );
+                visible
             }
         };
+
+        tracing::trace!(
+            "ensure_visible: cursor_line_start={}, cursor_is_visible={}",
+            cursor_line_start, cursor_is_visible
+        );
 
         // If cursor is not visible, scroll to make it visible
         if !cursor_is_visible {
@@ -633,6 +645,10 @@ impl Viewport {
                 }
 
                 let new_top_byte = iter.current_position();
+                tracing::trace!(
+                    "ensure_visible: SCROLLING from top_byte={} to new_top_byte={} (target_rows={})",
+                    self.top_byte, new_top_byte, target_rows_from_top
+                );
                 self.set_top_byte_with_limit(buffer, new_top_byte);
             }
         }

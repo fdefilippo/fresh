@@ -6,14 +6,8 @@ impl Editor {
         let _span = tracing::trace_span!("render").entered();
         let size = frame.area();
 
-        // Sync viewport with cursor position if needed (deferred from event processing)
-        // This batches multiple cursor movements into a single viewport update
-        if let Some(state) = self.buffers.get_mut(&self.active_buffer) {
-            let primary_cursor = *state.cursors.primary();
-            state
-                .viewport
-                .sync_with_cursor(&mut state.buffer, &primary_cursor);
-        }
+        // NOTE: Viewport sync with cursor is handled by split_rendering.rs which knows the
+        // correct content area dimensions. Don't sync here with incorrect EditorState viewport size.
 
         // Prepare all buffers for rendering (pre-load viewport data for lazy loading)
         for (_, state) in &mut self.buffers {
