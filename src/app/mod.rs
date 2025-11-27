@@ -56,7 +56,6 @@ use crate::model::event::{CursorId, Event, EventLog, SplitDirection, SplitId};
 use crate::services::async_bridge::{AsyncBridge, AsyncMessage};
 use crate::services::fs::{FsBackend, FsManager, LocalFsBackend};
 use crate::services::lsp::client::LspServerConfig;
-use crate::services::lsp::diagnostics;
 use crate::services::lsp::manager::{detect_language, LspManager, LspSpawnResult};
 use crate::services::plugins::api::PluginCommand;
 use crate::services::plugins::thread::PluginThreadHandle;
