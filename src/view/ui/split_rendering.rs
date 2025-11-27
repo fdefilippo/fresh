@@ -114,6 +114,163 @@ struct LineRenderInput<'a> {
     estimated_lines: usize,
 }
 
+/// Context for computing the style of a single character
+struct CharStyleContext<'a> {
+    byte_pos: Option<usize>,
+    token_style: Option<&'a crate::services::plugins::api::ViewTokenStyle>,
+    ansi_style: Style,
+    is_cursor: bool,
+    is_selected: bool,
+    theme: &'a crate::view::theme::Theme,
+    highlight_spans: &'a [crate::primitives::highlighter::HighlightSpan],
+    semantic_spans: &'a [crate::primitives::highlighter::HighlightSpan],
+    viewport_overlays: &'a [(crate::view::overlay::Overlay, Range<usize>)],
+    primary_cursor_position: usize,
+    is_active: bool,
+}
+
+/// Output from compute_char_style
+struct CharStyleOutput {
+    style: Style,
+    is_secondary_cursor: bool,
+}
+
+/// Compute the style for a character by layering: token -> ANSI -> syntax -> semantic -> overlays -> selection -> cursor
+fn compute_char_style(ctx: &CharStyleContext) -> CharStyleOutput {
+    use crate::view::overlay::OverlayFace;
+
+    // Find highlight color for this byte position
+    let highlight_color = ctx.byte_pos.and_then(|bp| {
+        ctx.highlight_spans
+            .iter()
+            .find(|span| span.range.contains(&bp))
+            .map(|span| span.color)
+    });
+
+    // Find overlays for this byte position
+    let overlays: Vec<&crate::view::overlay::Overlay> = if let Some(bp) = ctx.byte_pos {
+        ctx.viewport_overlays
+            .iter()
+            .filter(|(_, range)| range.contains(&bp))
+            .map(|(overlay, _)| overlay)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // Start with token style if present (for injected content like annotation headers)
+    // Otherwise use ANSI/syntax/theme default
+    let mut style = if let Some(ts) = ctx.token_style {
+        let mut s = Style::default();
+        if let Some((r, g, b)) = ts.fg {
+            s = s.fg(ratatui::style::Color::Rgb(r, g, b));
+        } else {
+            s = s.fg(ctx.theme.editor_fg);
+        }
+        if let Some((r, g, b)) = ts.bg {
+            s = s.bg(ratatui::style::Color::Rgb(r, g, b));
+        }
+        if ts.bold {
+            s = s.add_modifier(Modifier::BOLD);
+        }
+        if ts.italic {
+            s = s.add_modifier(Modifier::ITALIC);
+        }
+        s
+    } else if ctx.ansi_style.fg.is_some()
+        || ctx.ansi_style.bg.is_some()
+        || !ctx.ansi_style.add_modifier.is_empty()
+    {
+        // Apply ANSI styling from escape codes
+        let mut s = Style::default();
+        if let Some(fg) = ctx.ansi_style.fg {
+            s = s.fg(fg);
+        } else {
+            s = s.fg(ctx.theme.editor_fg);
+        }
+        if let Some(bg) = ctx.ansi_style.bg {
+            s = s.bg(bg);
+        }
+        s = s.add_modifier(ctx.ansi_style.add_modifier);
+        s
+    } else if let Some(color) = highlight_color {
+        // Apply syntax highlighting
+        Style::default().fg(color)
+    } else {
+        // Default color from theme
+        Style::default().fg(ctx.theme.editor_fg)
+    };
+
+    // If we have ANSI style but also syntax highlighting, syntax takes precedence for color
+    // (unless ANSI has explicit color which we already applied above)
+    if highlight_color.is_some()
+        && ctx.ansi_style.fg.is_none()
+        && (ctx.ansi_style.bg.is_some() || !ctx.ansi_style.add_modifier.is_empty())
+    {
+        style = style.fg(highlight_color.unwrap());
+    }
+
+    // Apply semantic highlighting
+    if let Some(bp) = ctx.byte_pos {
+        if let Some(semantic_span) = ctx
+            .semantic_spans
+            .iter()
+            .find(|span| span.range.contains(&bp))
+        {
+            style = style.bg(semantic_span.color);
+        }
+    }
+
+    // Apply overlay styles
+    for overlay in &overlays {
+        match &overlay.face {
+            OverlayFace::Underline {
+                color,
+                style: _underline_style,
+            } => {
+                style = style.add_modifier(Modifier::UNDERLINED).fg(*color);
+            }
+            OverlayFace::Background { color } => {
+                style = style.bg(*color);
+            }
+            OverlayFace::Foreground { color } => {
+                style = style.fg(*color);
+            }
+            OverlayFace::Style {
+                style: overlay_style,
+            } => {
+                style = style.patch(*overlay_style);
+            }
+        }
+    }
+
+    // Apply selection highlighting
+    if ctx.is_selected {
+        style = Style::default()
+            .fg(ctx.theme.editor_fg)
+            .bg(ctx.theme.selection_bg);
+    }
+
+    // Apply cursor styling - make secondary cursors visible with reversed colors
+    // Don't apply REVERSED to primary cursor to preserve terminal cursor visibility
+    // For inactive splits, ALL cursors use a less pronounced color (no hardware cursor)
+    let is_secondary_cursor = ctx.is_cursor && ctx.byte_pos != Some(ctx.primary_cursor_position);
+    if ctx.is_active {
+        if is_secondary_cursor {
+            style = style.add_modifier(Modifier::REVERSED);
+        }
+    } else if ctx.is_cursor {
+        style = style
+            .fg(ctx.theme.editor_fg)
+            .bg(ctx.theme.inactive_cursor);
+    }
+
+    CharStyleOutput {
+        style,
+        is_secondary_cursor,
+    }
+}
+
 /// Renders split panes and their content
 pub struct SplitRenderer;
 
@@ -1647,128 +1804,24 @@ impl SplitRenderer {
                         })
                         || (!is_cursor && is_in_block_selection);
 
-                    let highlight_color = byte_pos.and_then(|bp| {
-                        highlight_spans
-                            .iter()
-                            .find(|span| span.range.contains(&bp))
-                            .map(|span| span.color)
-                    });
-
-                    let overlays: Vec<&crate::view::overlay::Overlay> = if let Some(bp) = byte_pos {
-                        viewport_overlays
-                            .iter()
-                            .filter(|(_, range)| range.contains(&bp))
-                            .map(|(overlay, _)| overlay)
-                            .collect()
-                    } else {
-                        Vec::new()
-                    };
-
-                    // Build style by layering: token style -> ansi -> syntax -> semantic -> overlays -> selection
-                    // First check for explicit token style (for injected annotations)
+                    // Compute character style using helper function
                     let token_style = line_char_styles.get(col_offset).and_then(|s| s.as_ref());
-
-                    // Start with token style if present (for injected content like annotation headers)
-                    // Otherwise use ANSI/syntax/theme default
-                    let mut style = if let Some(ts) = token_style {
-                        // Apply explicit token style (typically for injected content with source_offset: None)
-                        let mut s = Style::default();
-                        if let Some((r, g, b)) = ts.fg {
-                            s = s.fg(ratatui::style::Color::Rgb(r, g, b));
-                        } else {
-                            s = s.fg(theme.editor_fg);
-                        }
-                        if let Some((r, g, b)) = ts.bg {
-                            s = s.bg(ratatui::style::Color::Rgb(r, g, b));
-                        }
-                        if ts.bold {
-                            s = s.add_modifier(Modifier::BOLD);
-                        }
-                        if ts.italic {
-                            s = s.add_modifier(Modifier::ITALIC);
-                        }
-                        s
-                    } else if ansi_style.fg.is_some()
-                        || ansi_style.bg.is_some()
-                        || !ansi_style.add_modifier.is_empty()
-                    {
-                        // Apply ANSI styling from escape codes
-                        let mut s = Style::default();
-                        if let Some(fg) = ansi_style.fg {
-                            s = s.fg(fg);
-                        } else {
-                            s = s.fg(theme.editor_fg);
-                        }
-                        if let Some(bg) = ansi_style.bg {
-                            s = s.bg(bg);
-                        }
-                        s = s.add_modifier(ansi_style.add_modifier);
-                        s
-                    } else if let Some(color) = highlight_color {
-                        // Apply syntax highlighting
-                        Style::default().fg(color)
-                    } else {
-                        // Default color from theme
-                        Style::default().fg(theme.editor_fg)
-                    };
-
-                    // If we have ANSI style but also syntax highlighting, syntax takes precedence for color
-                    // (unless ANSI has explicit color which we already applied above)
-                    if highlight_color.is_some()
-                        && ansi_style.fg.is_none()
-                        && (ansi_style.bg.is_some() || !ansi_style.add_modifier.is_empty())
-                    {
-                        // ANSI had bg or modifiers but not fg, so apply syntax fg
-                        style = style.fg(highlight_color.unwrap());
-                    }
-
-                    if let Some(bp) = byte_pos {
-                        if let Some(semantic_span) =
-                            semantic_spans.iter().find(|span| span.range.contains(&bp))
-                        {
-                            style = style.bg(semantic_span.color);
-                        }
-                    }
-
-                    use crate::view::overlay::OverlayFace;
-                    for overlay in &overlays {
-                        match &overlay.face {
-                            OverlayFace::Underline {
-                                color,
-                                style: _underline_style,
-                            } => {
-                                style = style.add_modifier(Modifier::UNDERLINED).fg(*color);
-                            }
-                            OverlayFace::Background { color } => {
-                                style = style.bg(*color);
-                            }
-                            OverlayFace::Foreground { color } => {
-                                style = style.fg(*color);
-                            }
-                            OverlayFace::Style {
-                                style: overlay_style,
-                            } => {
-                                style = style.patch(*overlay_style);
-                            }
-                        }
-                    }
-
-                    if is_selected {
-                        style = Style::default().fg(theme.editor_fg).bg(theme.selection_bg);
-                    }
-
-                    // Cursor styling - make secondary cursors visible with reversed colors
-                    // Don't apply REVERSED to primary cursor to preserve terminal cursor visibility
-                    // For inactive splits, ALL cursors use a less pronounced color (no hardware cursor)
-                    let is_secondary_cursor =
-                        is_cursor && byte_pos != Some(primary_cursor_position);
-                    if is_active {
-                        if is_secondary_cursor {
-                            style = style.add_modifier(Modifier::REVERSED);
-                        }
-                    } else if is_cursor {
-                        style = style.fg(theme.editor_fg).bg(theme.inactive_cursor);
-                    }
+                    let CharStyleOutput {
+                        style,
+                        is_secondary_cursor,
+                    } = compute_char_style(&CharStyleContext {
+                        byte_pos,
+                        token_style,
+                        ansi_style,
+                        is_cursor,
+                        is_selected,
+                        theme,
+                        highlight_spans,
+                        semantic_spans,
+                        viewport_overlays,
+                        primary_cursor_position,
+                        is_active,
+                    });
 
                     // Determine display character (tabs already expanded in ViewLineIterator)
                     // Show tab indicator (→) at the start of tab expansions
