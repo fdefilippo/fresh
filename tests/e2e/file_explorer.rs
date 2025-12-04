@@ -236,9 +236,7 @@ fn test_file_explorer_open_file() {
     }
 
     // Navigate down to the file (first child after root)
-    harness
-        .send_key(KeyCode::Down, KeyModifiers::NONE)
-        .unwrap();
+    harness.send_key(KeyCode::Down, KeyModifiers::NONE).unwrap();
     harness.render().unwrap();
 
     // Try to open with Enter - should work if we're on a file

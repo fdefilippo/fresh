@@ -332,8 +332,7 @@ fn test_backspace_utf8_file_save_roundtrip() {
     // Verify the file contains only a newline (euro sign fully deleted)
     let saved = std::fs::read(&euro_path).unwrap();
     assert_eq!(
-        saved,
-        b"\n",
+        saved, b"\n",
         "Euro sign should be fully deleted, file should contain only newline. Got: {:?}",
         saved
     );
@@ -347,9 +346,7 @@ fn test_backspace_utf8_file_save_roundtrip() {
     harness2.render().unwrap();
 
     // Move to end of line
-    harness2
-        .send_key(KeyCode::End, KeyModifiers::NONE)
-        .unwrap();
+    harness2.send_key(KeyCode::End, KeyModifiers::NONE).unwrap();
 
     // Backspace should delete 'å' entirely (2 bytes)
     harness2

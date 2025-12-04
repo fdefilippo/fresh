@@ -24,7 +24,10 @@ use tempfile::TempDir;
 #[derive(Debug, Clone)]
 enum BufferOp {
     /// Insert bytes at a specific offset
-    Insert { offset_percent: u8, content: Vec<u8> },
+    Insert {
+        offset_percent: u8,
+        content: Vec<u8>,
+    },
     /// Delete bytes at a specific offset
     Delete { offset_percent: u8, len_percent: u8 },
     /// Insert at the very start
@@ -66,7 +69,9 @@ impl BufferOp {
                     let len = if max_len == 0 {
                         0
                     } else {
-                        ((max_len * (*len_percent as usize)) / 255).max(1).min(max_len)
+                        ((max_len * (*len_percent as usize)) / 255)
+                            .max(1)
+                            .min(max_len)
                     };
                     if len > 0 && offset < total {
                         buffer.delete_bytes(offset, len);
@@ -127,7 +132,9 @@ impl BufferOp {
                     let len = if max_len == 0 {
                         0
                     } else {
-                        ((max_len * (*len_percent as usize)) / 255).max(1).min(max_len)
+                        ((max_len * (*len_percent as usize)) / 255)
+                            .max(1)
+                            .min(max_len)
                     };
                     if len > 0 && offset < total {
                         shadow.drain(offset..offset + len);
@@ -1004,20 +1011,18 @@ fn content_with_crlf_strategy(max_lines: usize) -> impl Strategy<Value = Vec<u8>
 }
 
 fn content_with_lf_strategy(max_lines: usize) -> impl Strategy<Value = Vec<u8>> {
-    prop::collection::vec(
-        prop::collection::vec(32u8..127u8, 5..30),
-        1..=max_lines,
-    )
-    .prop_map(|lines| {
-        let mut result = Vec::new();
-        for (i, line) in lines.iter().enumerate() {
-            result.extend(line);
-            if i < lines.len() - 1 {
-                result.push(b'\n'); // LF line endings
+    prop::collection::vec(prop::collection::vec(32u8..127u8, 5..30), 1..=max_lines).prop_map(
+        |lines| {
+            let mut result = Vec::new();
+            for (i, line) in lines.iter().enumerate() {
+                result.extend(line);
+                if i < lines.len() - 1 {
+                    result.push(b'\n'); // LF line endings
+                }
             }
-        }
-        result
-    })
+            result
+        },
+    )
 }
 
 fn content_with_mixed_endings_strategy(max_lines: usize) -> impl Strategy<Value = Vec<u8>> {
@@ -1204,8 +1209,7 @@ fn test_crlf_preserved_after_edit() {
 
     // Should have CRLF throughout
     assert_eq!(
-        saved,
-        b"line1\r\ninserted\r\nline2\r\nline3\r\n",
+        saved, b"line1\r\ninserted\r\nline2\r\nline3\r\n",
         "CRLF should be preserved"
     );
 }
