@@ -25,5 +25,5 @@ global-artifacts-jobs = ["./linux-packages"]
 tap = "sinelaw/homebrew-fresh"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew", "npm"]
-# Post-announce jobs to run in CI (after release is created)
+# Post-announce jobs to run in CI
 post-announce-jobs = ["./aur-publish", "./cargo-publish"]
