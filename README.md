@@ -14,9 +14,9 @@ Fresh is designed for discovery. It features native UIs, a full Menu system, and
 
 Extend Fresh easily using modern tools. Plugins are written in TypeScript and run securely in a sandboxed Deno environment, providing access to a modern JavaScript ecosystem without compromising stability.
 
-## Zero-Latency Performance
+## Low-Latency Performance
 
-Fresh is engineered for speed. It delivers a near zero-latency experience, with text appearing instantly. The editor is designed to be light and fast, reliably opening and editing huge files up to multi-gigabyte sizes without slowdown.
+Fresh is engineered for speed. It delivers a low-latency experience, with text appearing instantly. The editor is designed to be light and fast, reliably opening and editing [huge files up to multi-gigabyte sizes](https://noamlewis.com/blog/2025/12/09/how-fresh-loads-huge-files-fast) without slowdown.
 
 ## Comprehensive Feature Set
 
