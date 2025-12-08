@@ -1,6 +1,58 @@
 # Release Notes
 
-## 0.1.25 - Unreleased
+## 0.1.27 - Unreleased
+
+### Features
+
+* **Update Checker**: Automatically checks for new versions periodically (every 24 hours) and on quit, showing a notification when updates are available.
+
+* **Diagnostics Panel**: New diagnostics panel plugin showing all errors/warnings in a dedicated split view. Opens in horizontal split, auto-updates on buffer change, and syncs cursor position with F8/Shift+F8 navigation. Includes help line with keybinding hints.
+
+* **Diagnostics API**: New plugin API for accessing LSP diagnostics programmatically.
+
+* **LSP Initialization Options**: Added support for `initialization_options` in LSP server configuration.
+
+* **Warning Log Layer**: Captures WARN+ level logs to a file and can open them in the editor for debugging.
+
+* **Plugin Hook**: Added `cursor_moved` hook for plugins to respond to cursor position changes. Standardized hook naming to use underscores.
+
+### Bug Fixes
+
+* **UTF-8 Status Bar**: Fixed panic when truncating status bar text mid-character.
+
+* **Session Restore**: Fixed session restore when a plugin buffer was the active buffer.
+
+* **Viewport Sync**: Fixed viewport sync issues after SplitViewState refactoring.
+
+* **LSP Null Response**: Treat null LSP response as valid result instead of error.
+
+* **LSP Auto-Start**: Persist LSP auto-start setting when manually stopping the server.
+
+* **Safe String Slicing**: Use safe string slicing in get_text_to_end_of_line to prevent panics.
+
+### Internal
+
+* **SplitViewState Refactoring**: Made SplitViewState authoritative for viewport state.
+
+* **Default Log Path**: Use system temp directory for default log file path.
+
+* **Test Reliability**: Fixed flaky tests on macOS and Windows, improved diagnostics panel tests.
+
+* **Dependency Updates**: Updated deno_core, schemars, libloading, and GitHub Actions dependencies.
+
+* **Documentation**: Added macOS plugin location information, documented reloadConfig plugin API.
+
+---
+
+## 0.1.26
+
+### Bug Fixes
+
+* **aarch64 Build**: Fixed build on aarch64 Linux by enabling v8_use_custom_libcxx.
+
+---
+
+## 0.1.25
 
 ### Features
 
