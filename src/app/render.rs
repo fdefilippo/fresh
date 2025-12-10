@@ -81,10 +81,18 @@ impl Editor {
         let prompt_line_idx = 4;
 
         // Split main content area based on file explorer visibility
+        // Also keep the layout split if a sync is in progress (to avoid flicker)
         let editor_content_area;
+        let file_explorer_should_show =
+            self.file_explorer_visible && (self.file_explorer.is_some() || self.file_explorer_sync_in_progress);
 
-        if self.file_explorer_visible && self.file_explorer.is_some() {
+        if file_explorer_should_show {
             // Split horizontally: [file_explorer | editor]
+            tracing::trace!(
+                "render: file explorer layout active (present={}, sync_in_progress={})",
+                self.file_explorer.is_some(),
+                self.file_explorer_sync_in_progress
+            );
             // Convert f32 percentage (0.0-1.0) to u16 percentage (0-100)
             let explorer_percent = (self.file_explorer_width_percent * 100.0) as u16;
             let editor_percent = 100 - explorer_percent;
@@ -99,7 +107,7 @@ impl Editor {
             self.cached_layout.file_explorer_area = Some(horizontal_chunks[0]);
             editor_content_area = horizontal_chunks[1];
 
-            // Render file explorer
+            // Render file explorer (only if we have it - during sync we just keep the area reserved)
             if let Some(ref mut explorer) = self.file_explorer {
                 let is_focused = self.key_context == KeyContext::FileExplorer;
 
@@ -131,6 +139,8 @@ impl Editor {
                     close_button_hovered,
                 );
             }
+            // Note: if file_explorer is None but sync_in_progress is true,
+            // we just leave the area blank (or could render a placeholder)
         } else {
             // No file explorer: use entire main content area for editor
             self.cached_layout.file_explorer_area = None;

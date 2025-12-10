@@ -76,6 +76,11 @@ impl Editor {
             return;
         }
 
+        // Don't start a new sync if one is already in progress
+        if self.file_explorer_sync_in_progress {
+            return;
+        }
+
         if let Some(metadata) = self.buffer_metadata.get(&self.active_buffer()) {
             if let Some(file_path) = metadata.file_path() {
                 let target_path = file_path.clone();
@@ -83,10 +88,16 @@ impl Editor {
 
                 if target_path.starts_with(&working_dir) {
                     if let Some(mut view) = self.file_explorer.take() {
+                        tracing::trace!(
+                            "sync_file_explorer_to_active_file: taking file_explorer for async expand to {:?}",
+                            target_path
+                        );
                         if let (Some(runtime), Some(bridge)) =
                             (&self.tokio_runtime, &self.async_bridge)
                         {
                             let sender = bridge.sender();
+                            // Mark sync as in progress so render knows to keep the layout
+                            self.file_explorer_sync_in_progress = true;
 
                             runtime.spawn(async move {
                                 let _success = view.expand_and_select_file(&target_path).await;

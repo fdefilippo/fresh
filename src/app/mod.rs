@@ -188,6 +188,10 @@ pub struct Editor {
     /// Whether file explorer is visible
     file_explorer_visible: bool,
 
+    /// Whether file explorer is being synced to active file (async operation in progress)
+    /// When true, we still render the file explorer area even if file_explorer is temporarily None
+    file_explorer_sync_in_progress: bool,
+
     /// File explorer width as percentage (0.0 to 1.0)
     /// This is the runtime value that can be modified by dragging the border
     file_explorer_width_percent: f32,
@@ -693,6 +697,7 @@ impl Editor {
             file_explorer: None,
             fs_manager,
             file_explorer_visible: false,
+            file_explorer_sync_in_progress: false,
             file_explorer_width_percent: file_explorer_width,
             mouse_enabled: true,
             mouse_cursor_position: None,
@@ -2567,8 +2572,8 @@ impl Editor {
         // Use effective_tabs_width() to account for file explorer taking 30% of width
         self.ensure_active_tab_visible(active_split, buffer_id, self.effective_tabs_width());
 
-        // Sync file explorer to the new active file (if visible and applicable)
-        self.sync_file_explorer_to_active_file();
+        // Note: We don't sync file explorer here to avoid flicker during tab switches.
+        // File explorer syncs when explicitly focused via focus_file_explorer().
 
         // Emit buffer_activated hook for plugins
         self.plugin_manager.run_hook(
@@ -2622,7 +2627,8 @@ impl Editor {
                     view_state.add_buffer(buffer_id);
                     view_state.previous_buffer = Some(previous_buffer);
                 }
-                self.sync_file_explorer_to_active_file();
+                // Note: We don't sync file explorer here to avoid flicker during split focus changes.
+                // File explorer syncs when explicitly focused via focus_file_explorer().
             }
         } else {
             // Same split, different buffer (tab switch) - use set_active_buffer for terminal resume

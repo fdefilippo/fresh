@@ -4,10 +4,19 @@
 name: npm-publish
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.1.32)'
+        required: true
+        type: string
   workflow_call:
     inputs:
       plan:
-        required: true
+        required: false
+        type: string
+      version:
+        required: false
         type: string
 
 jobs:
@@ -19,14 +28,23 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PLAN: ${{ inputs.plan }}
-    if: ${{ !fromJson(inputs.plan).announcement_is_prerelease || fromJson(inputs.plan).publish_prereleases }}
+      VERSION: ${{ inputs.version }}
+    if: ${{ inputs.version || !fromJson(inputs.plan).announcement_is_prerelease || fromJson(inputs.plan).publish_prereleases }}
     steps:
-      - name: Fetch npm packages
+      # Download from artifacts when called from release workflow
+      - name: Fetch npm packages from artifacts
+        if: ${{ inputs.plan }}
         uses: actions/download-artifact@v4
         with:
           pattern: artifacts-*
           path: npm/
           merge-multiple: true
+      # Download from GitHub release when triggered manually
+      - name: Download npm package from release
+        if: ${{ !inputs.plan && inputs.version }}
+        run: |
+          mkdir -p npm
+          gh release download "v${VERSION}" --repo "${{ github.repository }}" --pattern "*-npm-package.tar.gz" --dir npm/
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
@@ -37,7 +55,15 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: true
         run: |
-          for release in $(echo "$PLAN" | jq --compact-output '.releases[] | select([.artifacts[] | endswith("-npm-package.tar.gz")] | any)'); do
-            pkg=$(echo "$release" | jq '.artifacts[] | select(endswith("-npm-package.tar.gz"))' --raw-output)
-            npm publish --access public --provenance "./npm/${pkg}"
-          done
+          if [ -n "$PLAN" ]; then
+            # Called from release workflow - use plan to find packages
+            for release in $(echo "$PLAN" | jq --compact-output '.releases[] | select([.artifacts[] | endswith("-npm-package.tar.gz")] | any)'); do
+              pkg=$(echo "$release" | jq '.artifacts[] | select(endswith("-npm-package.tar.gz"))' --raw-output)
+              npm publish --access public --provenance "./npm/${pkg}"
+            done
+          else
+            # Manual trigger - publish all npm packages found
+            for pkg in npm/*-npm-package.tar.gz; do
+              npm publish --access public --provenance "$pkg"
+            done
+          fi
