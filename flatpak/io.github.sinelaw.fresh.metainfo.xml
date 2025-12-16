@@ -22,7 +22,6 @@
       <li>Customizable themes and keymaps</li>
     </ul>
   </description>
-  <launchable type="desktop-id">io.github.sinelaw.fresh.desktop</launchable>
   <url type="homepage">https://sinelaw.github.io/fresh/</url>
   <url type="bugtracker">https://github.com/sinelaw/fresh/issues</url>
   <url type="vcs-browser">https://github.com/sinelaw/fresh</url>
