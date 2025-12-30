@@ -136,7 +136,6 @@ fn start_stdin_streaming() -> io::Result<StdinStreamState> {
         // SAFETY: pipe_fd is a valid duplicated file descriptor
         let mut pipe_file = unsafe { File::from_raw_fd(pipe_fd) };
         let mut temp_file = std::fs::OpenOptions::new()
-            .write(true)
             .append(true)
             .open(&temp_path_clone)?;
 
