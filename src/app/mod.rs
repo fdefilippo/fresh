@@ -3347,7 +3347,7 @@ impl Editor {
     }
 
     /// Handle a plugin command - dispatches to specialized handlers in plugin_commands module
-    fn handle_plugin_command(&mut self, command: PluginCommand) -> io::Result<()> {
+    pub fn handle_plugin_command(&mut self, command: PluginCommand) -> io::Result<()> {
         match command {
             // ==================== Text Editing Commands ====================
             PluginCommand::InsertText {

@@ -3023,9 +3023,10 @@ impl SplitRenderer {
             state.buffer.len()
         );
 
-        if !selection
-            .cursor_positions
-            .contains(&selection.primary_cursor_position)
+        if !selection.cursor_positions.is_empty()
+            && !selection
+                .cursor_positions
+                .contains(&selection.primary_cursor_position)
         {
             tracing::warn!(
                 "Primary cursor position {} not found in cursor_positions list: {:?}",
